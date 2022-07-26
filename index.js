@@ -13,33 +13,9 @@ var maxSize = 2048;
 var skinURL = "http://skinsystem.ely.by/skins/";
 
 
-// app config
-//app.use(express.logger());
-
 var renderFace = function(buffer, httpContext) {
   httpContext.res.type('png');
   httpContext.res.end(buffer, 'binary');
-}
-
-var renderPOI = function(buffer, httpContext) {
-  fs.readFile('./assets/images/poi.png', function(err, poiData) {
-    var poiImage = new Canvas.Image;
-    var faceImage = new Canvas.Image;
-    
-    poiImage.src = poiData;
-    faceImage.src = buffer;
-
-    var canvas = new Canvas(poiImage.width, poiImage.height);
-    var context = canvas.getContext('2d');
-
-    context.drawImage(poiImage, 0, 0, poiImage.width, poiImage.height);
-    context.drawImage(faceImage, 8, 8, faceImage.width, faceImage.height);
-    
-    canvas.toBuffer(function(err, compositeBuffer) {
-      httpContext.res.type('png');
-      httpContext.res.end(compositeBuffer, 'binary');
-    });
-  });
 }
 
 var drawFace = function(image, httpContext) {
@@ -54,10 +30,6 @@ var drawFace = function(image, httpContext) {
     }
   }
 
-  if (httpContext.req.query.poi != undefined && httpContext.req.query.poi.match(/^(?:1|true)$/i)) {
-    faceSize = 16;
-  }
-
   var canvas = new Canvas.Canvas(faceSize, faceSize);
   var context = canvas.getContext('2d');
   
@@ -69,11 +41,7 @@ var drawFace = function(image, httpContext) {
     context.drawImage(image, 40, 8, 8, 8, 0, 0, faceSize, faceSize);
   }
   canvas.toBuffer(function(err, buffer) {
-    if (httpContext.req.query.poi != undefined && httpContext.req.query.poi.match(/^(?:1|true)$/i)) {
-      renderPOI(buffer, httpContext);
-    } else {
-      renderFace(buffer, httpContext);
-    }
+    renderFace(buffer, httpContext);
   });
 }
 
@@ -122,7 +90,7 @@ app.get("/avatar", function(req, res) {
 });
 
 app.get("/", function(req, res) {
-  res.send(413)
+  res.sendStatus(418)
 });
 
 app.listen();
