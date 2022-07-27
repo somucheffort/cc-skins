@@ -2,7 +2,7 @@
 API to get skins from Ely.by (or other services)
 
 # How to use it
-You can use `https://mcskins.somucheffort.repl.co/u?={username}` as API for your plugin, or clone the project and run it on your own.
+You can use `https://mcskins.somucheffort.repl.co/?u={username}` as API for your plugin, or clone the project and run it on your own.
 
 ## query
 ### `u={username}`
