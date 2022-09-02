@@ -1,96 +1,123 @@
-var express = require('express');
-var request = require('request');
-var mkdirp = require('mkdirp');
-var fs = require('fs');
-var Canvas = require('canvas');
-var app = express();
+const express = require('express')
+const axios = require('axios')
+const fs = require('fs').promises
+const Canvas = require('canvas')
+const app = express()
 
-// instance-y vars
-var size = 256;
-var minSize = 8;
-var maxSize = 2048;
+const minSize = 8
+const maxSize = 2048
 
-var skinURL = "http://skinsystem.ely.by/skins/";
+const loadImage = url => {
+  return new Promise((resolve, reject) => {
+    const img = new Canvas.Image()
 
+    img.onload = () => resolve(img)
+    img.onerror = e => reject(e)
 
-var renderFace = function(buffer, httpContext) {
-  httpContext.res.type('png');
-  httpContext.res.end(buffer, 'binary');
+    axios
+      .get(url, {
+        responseType: 'arraybuffer'
+      })
+      .then(response => {
+        img.src = Buffer.from(response.data, 'binary')
+      })
+      .catch(e => reject(e))
+  })
 }
 
-var drawFace = function(image, httpContext) {
-  var faceSize = size;
-  if (httpContext.req.query.size != undefined && httpContext.req.query.size.match(/^\d+$/)) {
-    if (parseInt(httpContext.req.query.size) < minSize) {
-      faceSize = minSize;
-    } else if (parseInt(httpContext.req.query.size) > maxSize) {
-      faceSize = maxSize;
-    } else {
-      faceSize = parseInt(httpContext.req.query.size);
-    }
-  }
+const loadDefaultSkin = () => {
+  return new Promise((resolve, reject) => {
+    const img = new Canvas.Image()
 
-  var canvas = new Canvas.Canvas(faceSize, faceSize);
-  var context = canvas.getContext('2d');
+    img.onload = () => resolve(img)
+    img.onerror = e => reject(e)
+
+    fs.readFile('./default.png', 'binary')
+      .then(data => {
+        img.src = Buffer.from(data, 'binary')
+      })
+      .catch(e => reject(e))
+  })
+}
+
+const render = settings => {
+  loadImage(`${settings.skinURL}${settings.u}.png`)
+  .then(texture => {
+    drawSkin(texture, settings)
+  })
+  .catch(e => {
+    console.error(e)
+    console.log(`[mcskins/default] loading default skin, didn't find skin for ${settings.u}`)
+    
+    loadDefaultSkin()
+    .then(texture => {
+      drawSkin(texture, settings)
+    })
+  })
+}
+
+const drawSkin = (image, settings) => {
+  console.log('[mcskins/render] drawing skin...')
+
+  const faceSize = settings.getSize()
+  const canvas = settings.isSkin ? new Canvas.Canvas(image.width, image.height) : new Canvas.Canvas(faceSize, faceSize)
+  const context = canvas.getContext('2d')
   
-  context.patternQuality = 'nearest';
-  context.antialias = 'none';
-  context.drawImage(image, 8, 8, 8, 8, 0, 0, faceSize, faceSize);
-  if (!(httpContext.req.query.hat != undefined && httpContext.req.query.hat.match(/^(?:0|false)$/i))) {
-    // if 'hat' is undefined, or 'hat' is anything other than false, draw the hat
-    context.drawImage(image, 40, 8, 8, 8, 0, 0, faceSize, faceSize);
+  context.patternQuality = 'nearest'
+  context.antialias = 'none'
+  
+  try {
+    if (!settings.isSkin) {
+      context.drawImage(image, 8, 8, 8, 8, 0, 0, faceSize, faceSize)
+      context.drawImage(image, 40, 8, 8, 8, 0, 0, faceSize, faceSize)  
+    } else {
+      context.drawImage(image, 0, 0, image.width, image.height, 0, 0, image.width, image.height)
+    }
+    
+    return canvas.toBuffer((e, buf) => renderOut(buf, settings.res))
+  } catch (e) {
+    console.log('[mcskins/error] caught an error, writing default skin')
+    console.error(e)
+    
+    loadDefaultSkin()
+    .then(texture => {
+      drawSkin(texture, settings)
+    })
   }
-  canvas.toBuffer(function(err, buffer) {
-    renderFace(buffer, httpContext);
-  });
 }
 
-var loadTexture = function(cacheName, httpContext) {
-  fs.readFile('./cache/' + cacheName, function(err, data) {
-    if (err) {
-      // file does not exist, fetch it
-      var r = request(skinURL + httpContext.req.query.u + ".png").pipe(fs.createWriteStream('./cache/' + cacheName));
-      r.on('close', function() {
-        loadTexture(cacheName, httpContext);
-      });
-    } else {
-      // file does exist, continue processing
-      var texture = new Canvas.Image;
-      texture.src = data;
-      drawFace(texture, httpContext);
+const renderOut = (buffer, res) => {
+  console.log('[mcskins/render] rendering...')
+  res.type('png')
+  res.end(buffer, 'binary')
+  console.log('[mcskins/render] done')
+}
+
+app.get('/', (req, res) => {
+  if (req.query
+      && Object.keys(req.query).length === 0
+      && Object.getPrototypeOf(req.query) === Object.prototype) {
+    res.sendStatus(418)
+  } else {
+    const settings = {
+      u: req.query.u,
+      isSkin: req.query.skin === undefined ? false : true,
+      skinURL: 'http://skinsystem.ely.by/skins/',
+      getSize: () => {
+        if (parseInt(req.query.size) < minSize) {
+          return minSize
+        } else if (parseInt(req.query.size) > maxSize) {
+          return maxSize
+        }
+        
+        return parseInt(req.query.size) || 256
+      },
+      res: res
     }
-  });
-}
+    
+    console.log(`[mcskins/request] request for ${settings.u}`)
+    render(settings)
+  }
+})
 
-var render = function(httpContext) {
-  console.log
-  console.log(skinURL + httpContext.req.query.u + ".png")
-  request.get({
-    url: skinURL + httpContext.req.query.u + ".png",
-    followRedirect: true
-  }, function(err, res, body) {
-    console.log(res.statusCode)
-    if (res.statusCode == 200) {
-      var lastModified = new Date(res.headers['last-modified']);
-      var cacheName = httpContext.req.query.u + "." + lastModified.getTime() + ".png";
-      loadTexture(cacheName, httpContext);
-    } else {
-      fs.readFile('./assets/images/default.png', function(err, data) {
-        var texture = new Canvas.Image;
-        texture.src = data;
-        drawFace(texture, httpContext);
-      });
-    }
-  });
-}
-
-// legacy url structure support
-app.get("/avatar", function(req, res) {
-  render({req: req, res: res});
-});
-
-app.get("/", function(req, res) {
-  res.sendStatus(418)
-});
-
-app.listen();
+app.listen()
