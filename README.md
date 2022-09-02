@@ -1,15 +1,15 @@
 # skins
-API to get skins from Ely.by (or other services)
+`mcskins` is an API for getting player heads or skins
 
 # How to use it
-You can use `https://mcskins.somucheffort.repl.co/?u={username}` as API for your plugin, or clone the project and run it on your own.
+You can use `https://mcskins.somucheffort.repl.co/?u={username}` for your use, or clone the project and run it on your own.
 
 ## query
 ### `u={username}`
-Username of player
+Player username
 
-### `hat=true|false`
-Display second layer (hat) of the skin or no
+### `skin`
+Get player's skin, not only head
 
 ### `size=8-2048`
 Draw canvas from 8px to 2048px
